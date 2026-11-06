@@ -5,28 +5,7 @@ Copyright (c) 2026 whyicn (https://github.com/whyicn/headscale-ip-webui)
 All rights reserved. 保留所有权利。
 
 ========================================================================
-中文条款 (Chinese Terms)
-========================================================================
-
-1. 免费使用授权 (Free Use Grant)
-   本软件允许任何个人、非营利组织或企业从官方仓库
-   (https://github.com/whyicn/headscale-ip-webui) 免费下载、安装、运行及在内部环境
-   中自行修改使用。
-
-2. 禁止无限分发与商业转售 (No Redistribution & No Commercial Resale)
-   未经版权所有者书面许可，任何人不得：
-   (a) 将本软件的源代码、修改版本、二进制文件或预构建容器镜像重新发布、镜像或
-       分发至第三方平台；
-   (b) 将本软件单独或打包用于商业售卖、付费代部署或商业托管服务（SaaS）；
-   (c) 移除或篡改本软件中的版权声明及许可信息。
-   如需分享本软件，请直接引用官方仓库链接。
-
-3. 免责声明 (Disclaimer of Warranty)
-   本软件按“原样 (AS IS)”提供，不附带任何明示或暗示的担保。作者不对因使用本软件
-   而产生的任何直接、间接或附带的数据丢失或损害承担责任。
-
-========================================================================
-English Terms
+English Terms (Default)
 ========================================================================
 
 1. Free Use Grant
@@ -48,3 +27,24 @@ English Terms
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
    CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+========================================================================
+中文条款 (Chinese Terms)
+========================================================================
+
+1. 免费使用授权 (Free Use Grant)
+   本软件允许任何个人、非营利组织或企业从官方仓库
+   (https://github.com/whyicn/headscale-ip-webui) 免费下载、安装、运行及在内部环境
+   中自行修改使用。
+
+2. 禁止无限分发与商业转售 (No Redistribution & No Commercial Resale)
+   未经版权所有者书面许可，任何人不得：
+   (a) 将本软件的源代码、修改版本、二进制文件或预构建容器镜像重新发布、镜像或
+       分发至第三方平台；
+   (b) 将本软件单独或打包用于商业售卖、付费代部署或商业托管服务（SaaS）；
+   (c) 移除或篡改本软件中的版权声明及许可信息。
+   如需分享本软件，请直接引用官方仓库链接。
+
+3. 免责声明 (Disclaimer of Warranty)
+   本软件按“原样 (AS IS)”提供，不附带任何明示或暗示的担保。作者不对因使用本软件
+   而产生的任何直接、间接或附带的数据丢失或损害承担责任。

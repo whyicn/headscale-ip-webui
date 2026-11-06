@@ -729,8 +729,11 @@ HTML_TEMPLATE = """
   <main class="container">
     <!-- 1. Authentication View -->
     <div id="authView" class="auth-box" style="display: none;">
-      <div class="auth-title">Headscale Authentication</div>
-      <div class="auth-desc">Enter your Admin API Key to view and manage machine IPv4 addresses.</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+        <div id="authTitle" class="auth-title" style="margin-bottom: 0;">Headscale Authentication</div>
+        <button type="button" id="langBtnAuth" class="pill-btn" style="padding: 2px 10px; font-size: 12px;" onclick="toggleLang()">中文</button>
+      </div>
+      <div id="authDesc" class="auth-desc">Enter your Admin API Key to view and manage machine IPv4 addresses.</div>
       <div style="display: flex; gap: 8px;">
         <input type="password" id="apiKey" class="input-base mono" placeholder="hskey-api-..." autocomplete="off">
         <button type="button" id="authBtn" class="btn-primary" onclick="loadNodes(true)">Connect</button>
@@ -750,12 +753,16 @@ HTML_TEMPLATE = """
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
         </button>
 
-        <button type="button" class="pill-btn" onclick="loadNodes(true)">
+        <button type="button" id="refreshBtn" class="pill-btn" onclick="loadNodes(true)">
           Refresh
         </button>
 
-        <button type="button" class="pill-btn" onclick="switchApiKey()">
+        <button type="button" id="apiKeyBtn" class="pill-btn" onclick="switchApiKey()">
           API Key
+        </button>
+
+        <button type="button" id="langBtnMain" class="pill-btn" onclick="toggleLang()">
+          中文
         </button>
 
         <span id="machineCount" class="machine-count">0 machines</span>
@@ -763,7 +770,7 @@ HTML_TEMPLATE = """
 
       <div id="resultBanner" class="alert-bar">
         <span id="resultText"></span>
-        <button type="button" class="btn-ghost btn-sm" onclick="hideAlert()" style="height:22px; padding:0 8px; font-size:11.5px;">Dismiss</button>
+        <button type="button" id="dismissBtn" class="btn-ghost btn-sm" onclick="hideAlert()" style="height:22px; padding:0 8px; font-size:11.5px;">Dismiss</button>
       </div>
 
       <div class="table-wrap">
@@ -772,18 +779,18 @@ HTML_TEMPLATE = """
             <tr>
               <th>
                 <button type="button" class="th-btn" onclick="toggleSort('name')">
-                  Name
+                  <span id="thName">Name</span>
                   <svg id="sortIcon-name" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"></path></svg>
                 </button>
               </th>
               <th style="width: 34%;">
                 <button type="button" class="th-btn" onclick="toggleSort('ip')">
-                  Addresses
+                  <span id="thAddresses">Addresses</span>
                 </button>
               </th>
               <th>
                 <button type="button" class="th-btn" onclick="toggleSort('lastSeen')">
-                  Last Seen
+                  <span id="thLastSeen">Last Seen</span>
                 </button>
               </th>
             </tr>
@@ -798,6 +805,8 @@ HTML_TEMPLATE = """
 
   <script>
     const STORAGE_KEY = 'hs_ip_manager_api_key';
+    const LANG_KEY = 'hs_ip_manager_lang';
+    let currentLang = localStorage.getItem(LANG_KEY) || 'en'; // Default English
     let nodesList = [];
     let editingNodeId = null;
     let isSubmitting = false;
@@ -805,7 +814,149 @@ HTML_TEMPLATE = """
     let sortField = 'name';
     let sortAsc = true;
 
+    const I18N = {
+      en: {
+        langToggle: '中文',
+        pageTitle: 'Machines - Headscale',
+        authTitle: 'Headscale Authentication',
+        authDesc: 'Enter your Admin API Key to view and manage machine IPv4 addresses.',
+        connect: 'Connect',
+        connecting: 'Connecting...',
+        enterValidKey: 'Please enter a valid Admin API Key.',
+        invalidKey: 'Invalid or expired API Key.',
+        networkError: 'Network error: ',
+        searchPlaceholder: 'Search by name or IP address...',
+        statusAll: 'Status',
+        statusOnline: 'Status: Online',
+        statusOffline: 'Status: Offline',
+        refresh: 'Refresh',
+        apiKey: 'API Key',
+        dismiss: 'Dismiss',
+        thName: 'Name',
+        thAddresses: 'Addresses',
+        thLastSeen: 'Last Seen',
+        noMachines: 'No machines found',
+        machineCount: (n) => `${n} machine${n === 1 ? '' : 's'}`,
+        loadedToast: (n) => `Loaded ${n} machine${n === 1 ? '' : 's'}`,
+        ipUpdatedToast: 'IP updated',
+        tagOwned: 'Tag-owned',
+        noExpiry: 'No expiry',
+        expiredPrefix: 'Expired ',
+        expiresPrefix: 'Expires ',
+        connected: 'Connected',
+        onlineTitle: 'Online',
+        offlineTitle: 'Offline',
+        editIpTitle: 'Edit IP',
+        save: 'Save',
+        saving: 'Saving...',
+        cancel: 'Cancel',
+        swapIp: 'Swap IP',
+        enterEscHint: 'Press Enter to save, Esc to cancel',
+        inUseBy: (name) => `In use by <strong>${name}</strong>`,
+        available: (ip) => `✓ ${ip} available`,
+        invalidFormat: 'Invalid IPv4 format',
+        octetsNumeric: 'Octets must be numeric',
+        octetsRange: 'Octets must be 0-255',
+        outOfSubnet: 'Must be within 100.64.0.0/10',
+        netAddrError: 'Cannot use network address 100.64.0.0',
+        bcastAddrError: 'Cannot use broadcast address',
+        reqFailed: 'Request failed: ',
+        secAgo: (s) => `${s} seconds ago`,
+        minAgo: (m) => `${m} minute${m === 1 ? '' : 's'} ago`,
+        hrAgo: (h) => `${h} hour${h === 1 ? '' : 's'} ago`,
+        dayHrAgo: (d, h) => `${d} day${d === 1 ? '' : 's'}, ${h} hour${h === 1 ? '' : 's'} ago`,
+        dayAgo: (d) => `${d} day${d === 1 ? '' : 's'} ago`
+      },
+      zh: {
+        langToggle: 'EN',
+        pageTitle: '节点列表 - Headscale',
+        authTitle: 'Headscale 身份验证',
+        authDesc: '请输入管理员 API Key 以查看和修改节点 IPv4 地址。',
+        connect: '连接',
+        connecting: '连接中...',
+        enterValidKey: '请输入有效的管理员 API Key。',
+        invalidKey: 'API Key 无效或已过期。',
+        networkError: '网络错误: ',
+        searchPlaceholder: '搜索节点名称或 IP 地址...',
+        statusAll: '状态',
+        statusOnline: '状态: 在线',
+        statusOffline: '状态: 离线',
+        refresh: '刷新',
+        apiKey: '切换密钥',
+        dismiss: '关闭',
+        thName: '节点名称',
+        thAddresses: 'IPv4 地址',
+        thLastSeen: '最后在线',
+        noMachines: '未找到匹配的节点',
+        machineCount: (n) => `共 ${n} 台设备`,
+        loadedToast: (n) => `已加载 ${n} 台设备`,
+        ipUpdatedToast: 'IP 修改成功',
+        tagOwned: '标签所属 (Tag-owned)',
+        noExpiry: '永不过期',
+        expiredPrefix: '已过期 ',
+        expiresPrefix: '到期 ',
+        connected: '在线 (Connected)',
+        onlineTitle: '在线',
+        offlineTitle: '离线',
+        editIpTitle: '修改 IP',
+        save: '保存',
+        saving: '保存中...',
+        cancel: '取消',
+        swapIp: '互换 IP',
+        enterEscHint: '按 Enter 保存，按 Esc 取消',
+        inUseBy: (name) => `已被 <strong>${name}</strong> 占用`,
+        available: (ip) => `✓ ${ip} 可用`,
+        invalidFormat: '无效的 IPv4 地址格式',
+        octetsNumeric: 'IP 段必须为数字',
+        octetsRange: 'IP 段范围必须在 0-255 之间',
+        outOfSubnet: '必须位于 100.64.0.0/10 网段内',
+        netAddrError: '不可使用网络地址 100.64.0.0',
+        bcastAddrError: '不可使用广播地址',
+        reqFailed: '请求失败: ',
+        secAgo: (s) => `${s} 秒前`,
+        minAgo: (m) => `${m} 分钟前`,
+        hrAgo: (h) => `${h} 小时前`,
+        dayHrAgo: (d, h) => `${d} 天 ${h} 小时前`,
+        dayAgo: (d) => `${d} 天前`
+      }
+    };
+
+    function t() {
+      return I18N[currentLang] || I18N.en;
+    }
+
+    function applyLang() {
+      const d = t();
+      document.documentElement.lang = currentLang;
+      document.title = d.pageTitle;
+      document.getElementById('authTitle').textContent = d.authTitle;
+      document.getElementById('authDesc').textContent = d.authDesc;
+      const authBtn = document.getElementById('authBtn');
+      if (authBtn && !authBtn.disabled) authBtn.textContent = d.connect;
+      document.getElementById('langBtnAuth').textContent = d.langToggle;
+      document.getElementById('langBtnMain').textContent = d.langToggle;
+      document.getElementById('searchInput').placeholder = d.searchPlaceholder;
+      document.getElementById('refreshBtn').textContent = d.refresh;
+      document.getElementById('apiKeyBtn').textContent = d.apiKey;
+      document.getElementById('dismissBtn').textContent = d.dismiss;
+      document.getElementById('thName').textContent = d.thName;
+      document.getElementById('thAddresses').textContent = d.thAddresses;
+      document.getElementById('thLastSeen').textContent = d.thLastSeen;
+      updateStatusFilterLabel();
+      renderTable();
+      if (editingNodeId !== null) {
+        updateInlineValidation(editingNodeId);
+      }
+    }
+
+    function toggleLang() {
+      currentLang = (currentLang === 'en') ? 'zh' : 'en';
+      localStorage.setItem(LANG_KEY, currentLang);
+      applyLang();
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
+      applyLang();
       const savedKey = localStorage.getItem(STORAGE_KEY);
       if (savedKey) {
         document.getElementById('apiKey').value = savedKey;
@@ -843,21 +994,26 @@ HTML_TEMPLATE = """
       showAuthView();
     }
 
-    function cycleStatusFilter() {
-      const order = ['all', 'online', 'offline'];
-      statusFilter = order[(order.indexOf(statusFilter) + 1) % order.length];
+    function updateStatusFilterLabel() {
+      const d = t();
       const btn = document.getElementById('statusFilterBtn');
       const label = document.getElementById('statusFilterLabel');
       if (statusFilter === 'all') {
-        label.textContent = 'Status';
+        label.textContent = d.statusAll;
         btn.classList.remove('active');
       } else if (statusFilter === 'online') {
-        label.textContent = 'Status: Online';
+        label.textContent = d.statusOnline;
         btn.classList.add('active');
       } else {
-        label.textContent = 'Status: Offline';
+        label.textContent = d.statusOffline;
         btn.classList.add('active');
       }
+    }
+
+    function cycleStatusFilter() {
+      const order = ['all', 'online', 'offline'];
+      statusFilter = order[(order.indexOf(statusFilter) + 1) % order.length];
+      updateStatusFilterLabel();
       renderTable();
     }
 
@@ -882,20 +1038,21 @@ HTML_TEMPLATE = """
     }
 
     async function loadNodes(fromUserAction = false) {
+      const d = t();
       const key = getCleanKey();
       const authBtn = document.getElementById('authBtn');
       if (!key) {
-        showAuthView('Please enter a valid Admin API Key.');
+        showAuthView(d.enterValidKey);
         return;
       }
 
       if (authBtn) {
         authBtn.disabled = true;
-        authBtn.textContent = 'Connecting...';
+        authBtn.textContent = d.connecting;
       }
 
       try {
-        const res = await fetch('api/nodes', {
+        const res = await fetch(`api/nodes?lang=${currentLang}`, {
           headers: { 'Authorization': 'Bearer ' + key }
         });
         const data = await res.json();
@@ -903,7 +1060,7 @@ HTML_TEMPLATE = """
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) {
             localStorage.removeItem(STORAGE_KEY);
-            showAuthView(data.error || 'Invalid or expired API Key.');
+            showAuthView(data.error || d.invalidKey);
           } else {
             setTimeout(() => loadNodes(false), 1500);
           }
@@ -918,14 +1075,14 @@ HTML_TEMPLATE = """
 
         renderTable();
         if (fromUserAction) {
-          showToast(`Loaded ${nodesList.length} machines`);
+          showToast(d.loadedToast(nodesList.length));
         }
       } catch (e) {
-        showAuthView('Network error: ' + e.message);
+        showAuthView(d.networkError + e.message);
       } finally {
         if (authBtn) {
           authBtn.disabled = false;
-          authBtn.textContent = 'Connect';
+          authBtn.textContent = t().connect;
         }
       }
     }
@@ -934,47 +1091,51 @@ HTML_TEMPLATE = """
       if (!isoStr) return '';
       const d = new Date(isoStr);
       if (isNaN(d.getTime())) return '';
+      const dict = t();
       const diffSec = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
-      if (diffSec < 60) return `${diffSec} seconds ago`;
+      if (diffSec < 60) return dict.secAgo(diffSec);
       const diffMin = Math.floor(diffSec / 60);
-      if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+      if (diffMin < 60) return dict.minAgo(diffMin);
       const diffHr = Math.floor(diffMin / 60);
-      if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+      if (diffHr < 24) return dict.hrAgo(diffHr);
       const days = Math.floor(diffHr / 24);
       const remHr = diffHr % 24;
       if (remHr > 0) {
-        return `${days} day${days === 1 ? '' : 's'}, ${remHr} hour${remHr === 1 ? '' : 's'} ago`;
+        return dict.dayHrAgo(days, remHr);
       }
-      return `${days} day${days === 1 ? '' : 's'} ago`;
+      return dict.dayAgo(days);
     }
 
     function formatExpiryBadge(expiryStr) {
-      if (!expiryStr) return 'No expiry';
+      const dict = t();
+      if (!expiryStr) return dict.noExpiry;
       const d = new Date(expiryStr);
-      if (isNaN(d.getTime())) return 'No expiry';
+      if (isNaN(d.getTime())) return dict.noExpiry;
       const opts = { month: 'short', day: 'numeric', year: 'numeric' };
-      const formatted = d.toLocaleDateString('en-US', opts);
-      return d.getTime() < Date.now() ? `Expired ${formatted}` : `Expires ${formatted}`;
+      const locale = currentLang === 'zh' ? 'zh-CN' : 'en-US';
+      const formatted = d.toLocaleDateString(locale, opts);
+      return d.getTime() < Date.now() ? `${dict.expiredPrefix}${formatted}` : `${dict.expiresPrefix}${formatted}`;
     }
 
     function isValidTailscaleIpv4(ipStr) {
+      const dict = t();
       const parts = ipStr.split('.');
-      if (parts.length !== 4) return { valid: false, reason: 'Invalid IPv4 format' };
+      if (parts.length !== 4) return { valid: false, reason: dict.invalidFormat };
       const nums = [];
       for (const p of parts) {
-        if (!/^\\d+$/.test(p)) return { valid: false, reason: 'Octets must be numeric' };
+        if (!/^\\d+$/.test(p)) return { valid: false, reason: dict.octetsNumeric };
         const n = Number(p);
-        if (n < 0 || n > 255) return { valid: false, reason: 'Octets must be 0-255' };
+        if (n < 0 || n > 255) return { valid: false, reason: dict.octetsRange };
         nums.push(n);
       }
       if (nums[0] !== 100 || nums[1] < 64 || nums[1] > 127) {
-        return { valid: false, reason: 'Must be within 100.64.0.0/10' };
+        return { valid: false, reason: dict.outOfSubnet };
       }
       if (nums[1] === 64 && nums[2] === 0 && nums[3] === 0) {
-        return { valid: false, reason: 'Cannot use network address 100.64.0.0' };
+        return { valid: false, reason: dict.netAddrError };
       }
       if (nums[1] === 127 && nums[2] === 255 && nums[3] === 255) {
-        return { valid: false, reason: 'Cannot use broadcast address' };
+        return { valid: false, reason: dict.bcastAddrError };
       }
       return { valid: true };
     }
@@ -1001,6 +1162,7 @@ HTML_TEMPLATE = """
     }
 
     function updateInlineValidation(nodeId) {
+      const dict = t();
       const input = document.getElementById(`inline-ip-${nodeId}`);
       const hint = document.getElementById(`inline-hint-${nodeId}`);
       if (!input || !hint) return;
@@ -1009,7 +1171,7 @@ HTML_TEMPLATE = """
       const currentNode = nodesList.find(n => n.id === nodeId);
       if (!val || (currentNode && currentNode.ipv4 === val)) {
         hint.className = 'inline-hint';
-        hint.innerHTML = '<span style="color:var(--mist-500);">Press Enter to save, Esc to cancel</span>';
+        hint.innerHTML = `<span style="color:var(--mist-500);">${dict.enterEscHint}</span>`;
         return;
       }
 
@@ -1024,23 +1186,24 @@ HTML_TEMPLATE = """
       if (conflict) {
         hint.className = 'inline-hint conflict';
         hint.innerHTML = `
-          <span>In use by <strong>${conflict.displayName}</strong></span>
+          <span>${dict.inUseBy(conflict.displayName)}</span>
           <button type="button" class="btn-swap btn-sm" style="height:22px; padding:0 8px; font-size:11.5px;"
             onclick="submitRowIp(${nodeId}, true, event)">
-            Swap IP
+            ${dict.swapIp}
           </button>
         `;
         return;
       }
 
       hint.className = 'inline-hint ok';
-      hint.innerHTML = `<span>✓ ${val} available</span>`;
+      hint.innerHTML = `<span>${dict.available(val)}</span>`;
     }
 
     async function submitRowIp(nodeId, allowSwap = false, event = null) {
       if (event) event.stopPropagation();
       if (isSubmitting) return;
 
+      const dict = t();
       const input = document.getElementById(`inline-ip-${nodeId}`);
       const saveBtn = document.getElementById(`inline-save-${nodeId}`);
       if (!input) return;
@@ -1058,7 +1221,7 @@ HTML_TEMPLATE = """
       input.disabled = true;
       if (saveBtn) {
         saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
+        saveBtn.textContent = dict.saving;
       }
       hideAlert();
 
@@ -1072,7 +1235,8 @@ HTML_TEMPLATE = """
           body: JSON.stringify({
             node: nodeId,
             new_ip: newIp,
-            swap: allowSwap
+            swap: allowSwap,
+            lang: currentLang
           })
         });
         const data = await resp.json();
@@ -1086,20 +1250,20 @@ HTML_TEMPLATE = """
           } else {
             await loadNodes(false);
           }
-          showToast('IP updated');
+          showToast(t().ipUpdatedToast);
         } else {
           input.disabled = false;
           if (saveBtn) {
             saveBtn.disabled = false;
-            saveBtn.textContent = 'Save';
+            saveBtn.textContent = t().save;
           }
         }
       } catch (err) {
-        showAlert('Request failed: ' + err.message, false);
+        showAlert(t().reqFailed + err.message, false);
         input.disabled = false;
         if (saveBtn) {
           saveBtn.disabled = false;
-          saveBtn.textContent = 'Save';
+          saveBtn.textContent = t().save;
         }
       } finally {
         isSubmitting = false;
@@ -1112,6 +1276,7 @@ HTML_TEMPLATE = """
     }
 
     function renderTable() {
+      const dict = t();
       const tbody = document.getElementById('nodesTableBody');
       const query = (document.getElementById('searchInput').value || '').trim().toLowerCase();
 
@@ -1143,13 +1308,13 @@ HTML_TEMPLATE = """
         return sortAsc ? cmp : -cmp;
       });
 
-      document.getElementById('machineCount').textContent = `${filtered.length} machine${filtered.length === 1 ? '' : 's'}`;
+      document.getElementById('machineCount').textContent = dict.machineCount(filtered.length);
 
       if (filtered.length === 0) {
         tbody.innerHTML = `
           <tr>
             <td colspan="3" style="text-align: center; color: var(--mist-500); padding: 36px 0;">
-              No machines found
+              ${dict.noMachines}
             </td>
           </tr>
         `;
@@ -1164,7 +1329,7 @@ HTML_TEMPLATE = """
         tr.onclick = (e) => openRowEdit(n.id, e);
 
         const isTagOwned = (n.tags && n.tags.length > 0) || !n.user || n.user.toLowerCase().includes('tagged');
-        const ownerText = isTagOwned ? 'Tag-owned' : n.user;
+        const ownerText = isTagOwned ? dict.tagOwned : n.user;
         const expiryText = formatExpiryBadge(n.expiry);
         const tagsHtml = (n.tags || []).map(t => `<span class="badge-tag">${t}</span>`).join('');
 
@@ -1177,8 +1342,8 @@ HTML_TEMPLATE = """
                 <input id="inline-ip-${n.id}" type="text" class="inline-input mono" value="${n.ipv4 || ''}"
                   oninput="updateInlineValidation(${n.id})"
                   onkeydown="if(event.key==='Enter') submitRowIp(${n.id}, false, event); if(event.key==='Escape') cancelRowEdit(event);">
-                <button type="button" id="inline-save-${n.id}" class="btn-primary btn-sm" onclick="submitRowIp(${n.id}, false, event)">Save</button>
-                <button type="button" class="btn-ghost btn-sm" onclick="cancelRowEdit(event)">Cancel</button>
+                <button type="button" id="inline-save-${n.id}" class="btn-primary btn-sm" onclick="submitRowIp(${n.id}, false, event)">${dict.save}</button>
+                <button type="button" class="btn-ghost btn-sm" onclick="cancelRowEdit(event)">${dict.cancel}</button>
               </div>
               <div id="inline-hint-${n.id}" class="inline-hint"></div>
             </div>
@@ -1187,7 +1352,7 @@ HTML_TEMPLATE = """
           addrHtml = `
             <div class="addr-display">
               <span>${n.ipv4 || '-'}</span>
-              <button type="button" class="addr-chevron" title="Edit IP" onclick="openRowEdit(${n.id}, event)">
+              <button type="button" class="addr-chevron" title="${dict.editIpTitle}" onclick="openRowEdit(${n.id}, event)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
               </button>
             </div>
@@ -1200,21 +1365,22 @@ HTML_TEMPLATE = """
           lastSeenHtml = `
             <div class="last-seen-wrap">
               <svg class="status-icon status-online" viewBox="0 0 24 24" fill="currentColor">
-                <title>Online</title>
+                <title>${dict.onlineTitle}</title>
                 <circle cx="12" cy="12" r="8"></circle>
               </svg>
               <div>
-                <p class="last-seen-main">Connected</p>
+                <p class="last-seen-main">${dict.connected}</p>
               </div>
             </div>
           `;
         } else {
-          const dt = n.lastSeen ? new Date(n.lastSeen).toLocaleString('en-US') : '-';
+          const locale = currentLang === 'zh' ? 'zh-CN' : 'en-US';
+          const dt = n.lastSeen ? new Date(n.lastSeen).toLocaleString(locale) : '-';
           const rel = formatRelativeTime(n.lastSeen);
           lastSeenHtml = `
             <div class="last-seen-wrap">
               <svg class="status-icon status-offline" viewBox="0 0 24 24" fill="currentColor">
-                <title>Offline</title>
+                <title>${dict.offlineTitle}</title>
                 <circle cx="12" cy="12" r="8"></circle>
               </svg>
               <div>
@@ -1266,20 +1432,26 @@ def index():
 
 @app.route("/api/nodes", methods=["GET"])
 def get_nodes():
+    lang = request.args.get("lang", "en").lower()
+    is_zh = lang.startswith("zh")
     auth_header = request.headers.get("Authorization", "")
     raw_key = auth_header.replace("Bearer ", "").strip()
 
     if not raw_key:
-        return jsonify({"error": "Unauthorized: Missing API Key."}), 401
+        msg = "未授权：缺少 API Key。" if is_zh else "Unauthorized: Missing API Key."
+        return jsonify({"error": msg}), 401
 
     status, raw_nodes = fetch_headscale_nodes(raw_key, timeout=4.0)
     if status == "unauthorized":
-        return jsonify({"error": "Unauthorized: Invalid or expired API Key."}), 401
+        msg = "未授权：API Key 无效或已过期。" if is_zh else "Unauthorized: Invalid or expired API Key."
+        return jsonify({"error": msg}), 401
 
     if status == "unreachable" or raw_nodes is None:
         if not verify_token_via_sqlite(raw_key):
-            return jsonify({"error": "Unauthorized: Invalid or expired API Key."}), 401
-        return jsonify({"error": "Headscale is reloading, please wait..."}), 502
+            msg = "未授权：API Key 无效或已过期。" if is_zh else "Unauthorized: Invalid or expired API Key."
+            return jsonify({"error": msg}), 401
+        msg = "Headscale 正在重载中，请稍候..." if is_zh else "Headscale is reloading, please wait..."
+        return jsonify({"error": msg}), 502
 
     nodes = format_nodes_list(raw_nodes)
     return jsonify(nodes)
@@ -1287,29 +1459,36 @@ def get_nodes():
 
 @app.route("/api/change-ip", methods=["POST"])
 def change_ip():
+    body = request.get_json(silent=True) or {}
+    lang = str(body.get("lang", "en")).lower()
+    is_zh = lang.startswith("zh")
+
     auth_header = request.headers.get("Authorization", "")
     raw_key = auth_header.replace("Bearer ", "").strip()
 
     if not verify_token(raw_key):
-        return jsonify({"success": False, "message": "Unauthorized: Invalid or expired API Key."}), 403
+        msg = "未授权：API Key 无效或已过期。" if is_zh else "Unauthorized: Invalid or expired API Key."
+        return jsonify({"success": False, "message": msg}), 403
 
-    body = request.get_json(silent=True) or {}
     node_raw = str(body.get("node", "")).strip()
     new_ip_raw = str(body.get("new_ip", "")).strip()
     allow_swap = bool(body.get("swap", False))
 
     if not node_raw or not new_ip_raw:
-        return jsonify({"success": False, "message": "Missing target node ID or new IPv4 address."}), 400
+        msg = "缺少目标节点 ID 或新 IPv4 地址。" if is_zh else "Missing target node ID or new IPv4 address."
+        return jsonify({"success": False, "message": msg}), 400
 
     if not node_raw.isdigit():
-        return jsonify({"success": False, "message": f"Invalid node ID: {node_raw}"}), 400
+        msg = f"无效的节点 ID: {node_raw}" if is_zh else f"Invalid node ID: {node_raw}"
+        return jsonify({"success": False, "message": msg}), 400
     node_id = int(node_raw)
 
     prefixes = get_headscale_prefixes()
     try:
         ip_obj = ipaddress.IPv4Address(new_ip_raw)
     except ValueError:
-        return jsonify({"success": False, "message": f"Invalid IPv4 address format: {new_ip_raw}"}), 400
+        msg = f"无效的 IPv4 地址格式: {new_ip_raw}" if is_zh else f"Invalid IPv4 address format: {new_ip_raw}"
+        return jsonify({"success": False, "message": msg}), 400
 
     try:
         subnet = ipaddress.IPv4Network(prefixes["v4"], strict=False)
@@ -1317,18 +1496,26 @@ def change_ip():
         subnet = ipaddress.IPv4Network("100.64.0.0/10")
 
     if ip_obj not in subnet or ip_obj in (subnet.network_address, subnet.broadcast_address):
-        return jsonify({
-            "success": False,
-            "message": f"IP {ip_obj} is outside the configured Headscale subnet ({subnet})."
-        }), 400
+        msg = (
+            f"IP {ip_obj} 不在当前配置的 Headscale 网段 ({subnet}) 内。"
+            if is_zh
+            else f"IP {ip_obj} is outside the configured Headscale subnet ({subnet})."
+        )
+        return jsonify({"success": False, "message": msg}), 400
 
     new_ip = str(ip_obj)
     db_path = get_db_path()
     if not os.path.exists(db_path):
-        return jsonify({"success": False, "message": f"Database file not found: {db_path}"}), 500
+        msg = f"未找到数据库文件: {db_path}" if is_zh else f"Database file not found: {db_path}"
+        return jsonify({"success": False, "message": msg}), 500
 
     if not CHANGE_LOCK.acquire(timeout=20.0):
-        return jsonify({"success": False, "message": "Another IP change operation is in progress. Please try again."}), 429
+        msg = (
+            "另一个 IP 修改操作正在进行中，请稍后重试。"
+            if is_zh
+            else "Another IP change operation is in progress. Please try again."
+        )
+        return jsonify({"success": False, "message": msg}), 429
 
     try:
         status, live_raw_nodes = fetch_headscale_nodes(raw_key, timeout=3.0)
@@ -1336,21 +1523,33 @@ def change_ip():
             live_nodes = format_nodes_list(live_raw_nodes)
             target_live = next((n for n in live_nodes if n["id"] == node_id), None)
             if not target_live:
-                return jsonify({"success": False, "message": f"Machine #{node_id} not found."}), 404
+                msg = f"未找到节点 #{node_id}。" if is_zh else f"Machine #{node_id} not found."
+                return jsonify({"success": False, "message": msg}), 404
             if target_live["ipv4"] == new_ip:
+                msg = (
+                    f"节点 {target_live['displayName']} 当前 IP 已是 {new_ip}。"
+                    if is_zh
+                    else f"Machine {target_live['displayName']} already has IPv4 {new_ip}."
+                )
                 return jsonify({
                     "success": True,
-                    "message": f"Machine {target_live['displayName']} already has IPv4 {new_ip}.",
+                    "message": msg,
                     "nodes": live_nodes,
                 })
             conflict_live = next((n for n in live_nodes if n["ipv4"] == new_ip and n["id"] != node_id), None)
             if conflict_live and not allow_swap:
-                return jsonify({
-                    "success": False,
-                    "message": (
+                msg = (
+                    f"IP {new_ip} 已被节点 {conflict_live['displayName']} (#{conflict_live['id']}) 占用。"
+                    f"点击“互换 IP”可直接交换两台设备的地址。"
+                    if is_zh
+                    else (
                         f"IP {new_ip} is already assigned to {conflict_live['displayName']} (#{conflict_live['id']}). "
                         f"Click 'Swap IP' to exchange addresses between the two machines."
-                    ),
+                    )
+                )
+                return jsonify({
+                    "success": False,
+                    "message": msg,
                     "conflict_node": conflict_live,
                 }), 400
 
@@ -1379,7 +1578,8 @@ def change_ip():
                 )
                 row = cur.fetchone()
                 if not row:
-                    return jsonify({"success": False, "message": f"Machine #{node_id} not found in database."}), 404
+                    msg = f"数据库中未找到节点 #{node_id}。" if is_zh else f"Machine #{node_id} not found in database."
+                    return jsonify({"success": False, "message": msg}), 404
 
                 old_ip = row[0] or ""
                 node_name = row[1] or f"node-{node_id}"
@@ -1393,10 +1593,12 @@ def change_ip():
 
                 if conflict_row and not allow_swap:
                     c_id, c_name = conflict_row
-                    return jsonify({
-                        "success": False,
-                        "message": f"IP {new_ip} is already in use by {c_name} (#{c_id})."
-                    }), 400
+                    msg = (
+                        f"IP {new_ip} 已被 {c_name} (#{c_id}) 占用。"
+                        if is_zh
+                        else f"IP {new_ip} is already in use by {c_name} (#{c_id})."
+                    )
+                    return jsonify({"success": False, "message": msg}), 400
 
                 cur.execute("BEGIN IMMEDIATE;")
 
@@ -1413,14 +1615,20 @@ def change_ip():
                     )
                     expected_ips[int(c_id)] = old_ip
                     action_msg = (
-                        f"Swapped IPs: {node_name} ({old_ip} → {new_ip}) and {c_name} ({new_ip} → {old_ip})."
+                        f"已成功互换 IP：{node_name} ({old_ip} → {new_ip}) 与 {c_name} ({new_ip} → {old_ip})。"
+                        if is_zh
+                        else f"Swapped IPs: {node_name} ({old_ip} → {new_ip}) and {c_name} ({new_ip} → {old_ip})."
                     )
                 else:
                     cur.execute(
                         "UPDATE nodes SET ipv4 = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;",
                         (new_ip, node_id),
                     )
-                    action_msg = f"Updated {node_name} IPv4 from {old_ip} to {new_ip}."
+                    action_msg = (
+                        f"已将 {node_name} 的 IPv4 从 {old_ip} 更新为 {new_ip}。"
+                        if is_zh
+                        else f"Updated {node_name} IPv4 from {old_ip} to {new_ip}."
+                    )
 
                 conn.commit()
                 try:
@@ -1441,7 +1649,8 @@ def change_ip():
             "nodes": updated_nodes,
         })
     except Exception as e:
-        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 500
+        msg = f"错误: {str(e)}" if is_zh else f"Error: {str(e)}"
+        return jsonify({"success": False, "message": msg}), 500
     finally:
         CHANGE_LOCK.release()
 

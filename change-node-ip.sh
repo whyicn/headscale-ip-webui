@@ -17,12 +17,12 @@ elif [[ -f "/var/lib/headscale/db.sqlite" ]]; then
 elif [[ -f "/etc/headscale/db.sqlite" ]]; then
   DB_PATH="/etc/headscale/db.sqlite"
 else
-  echo "错误: 数据库文件不存在 (请通过 HEADSCALE_DB_PATH 指定 db.sqlite 路径)" >&2
+  echo "Error: Database file not found (set HEADSCALE_DB_PATH to specify db.sqlite path) / 错误: 数据库文件不存在" >&2
   exit 1
 fi
 
 if [[ -z "${NODE_ID}" || -z "${NEW_IPV4}" ]]; then
-  echo "用法: $0 <节点ID> <新IPv4地址> [--swap]" >&2
+  echo "Usage / 用法: $0 <node_id> <new_ipv4> [--swap]" >&2
   exit 1
 fi
 
@@ -39,21 +39,21 @@ import urllib.request
 node_id_raw, new_ip_raw, mode, db_path, container_name = sys.argv[1:6]
 allow_swap = (mode == "--swap")
 
-# 1. 参数与 IP 合法性校验
+# 1. Validate parameters and IPv4 format
 if not node_id_raw.isdigit():
-    print(f"错误: 节点 ID 必须为数字 (当前输入: {node_id_raw})", file=sys.stderr)
+    print(f"Error: Node ID must be numeric (got: {node_id_raw}) / 错误: 节点 ID 必须为数字", file=sys.stderr)
     sys.exit(1)
 node_id = int(node_id_raw)
 
 try:
     ip_obj = ipaddress.IPv4Address(new_ip_raw.strip())
 except ValueError:
-    print(f"错误: 无效的 IPv4 地址格式: {new_ip_raw}", file=sys.stderr)
+    print(f"Error: Invalid IPv4 address format: {new_ip_raw} / 错误: 无效的 IPv4 地址格式", file=sys.stderr)
     sys.exit(1)
 
 subnet = ipaddress.IPv4Network("100.64.0.0/10")
 if ip_obj not in subnet or ip_obj in (subnet.network_address, subnet.broadcast_address):
-    print(f"错误: IP {ip_obj} 不在 Tailscale/Headscale 专用 CGNAT 网段 (100.64.0.0/10) 内", file=sys.stderr)
+    print(f"Error: IP {ip_obj} is outside CGNAT subnet (100.64.0.0/10) / 错误: IP 不在专用网段内", file=sys.stderr)
     sys.exit(1)
 
 new_ip = str(ip_obj)
@@ -105,13 +105,13 @@ def wait_headscale_ready(max_wait: float = 12.0) -> bool:
 
 stopped = False
 try:
-    # 2. 先平滑停止 Headscale 容器，确保内存状态与 WAL 完整落盘并释放数据库锁
+    # 2. Gracefully stop Headscale container so in-memory state and WAL flush cleanly
     status = docker_api("POST", f"/containers/{container_name}/stop?t=8", timeout=12.0)
     if status in (204, 304):
         stopped = True
     time.sleep(0.15)
 
-    # 备份数据库
+    # Backup SQLite database
     try:
         shutil.copy2(db_path, f"{db_path}.bak")
     except Exception:
@@ -128,12 +128,12 @@ try:
         )
         row = cur.fetchone()
         if not row:
-            print(f"错误: 未找到该节点 (ID: {node_id})", file=sys.stderr)
+            print(f"Error: Machine not found (ID: {node_id}) / 错误: 未找到该节点", file=sys.stderr)
             sys.exit(1)
 
         old_ip, node_name = row[0] or "", row[1] or f"node-{node_id}"
         if old_ip == new_ip:
-            print(f"提示: 节点 [{node_name}] 当前 IP 已是 [{new_ip}]，无需重复修改。")
+            print(f"Info: Machine [{node_name}] already has IP [{new_ip}] / 提示: 当前 IP 未变化。")
             sys.exit(0)
 
         cur.execute(
@@ -145,7 +145,11 @@ try:
 
         if conflict and not allow_swap:
             c_id, c_name = conflict
-            print(f"错误: IP {new_ip} 已被其他节点占用 ({c_name} [ID: {c_id}])", file=sys.stderr)
+            print(
+                f"Error: IP {new_ip} is already in use by {c_name} [ID: {c_id}] (use --swap to exchange) / "
+                f"错误: IP 已被占用 ({c_name} [ID: {c_id}])",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         cur.execute("BEGIN IMMEDIATE;")
@@ -160,15 +164,15 @@ try:
                 (new_ip, node_id),
             )
             msg = (
-                f"修改成功！已互换节点 IP：[{node_name} (#{node_id})] {old_ip} -> {new_ip}，"
-                f"[{c_name} (#{c_id})] {new_ip} -> {old_ip}。"
+                f"Success! Swapped IPs: [{node_name} (#{node_id})] {old_ip} -> {new_ip}, "
+                f"[{c_name} (#{c_id})] {new_ip} -> {old_ip}."
             )
         else:
             cur.execute(
                 "UPDATE nodes SET ipv4 = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;",
                 (new_ip, node_id),
             )
-            msg = f"修改成功！节点 [{node_name} (#{node_id})] 的 IPv4 已从 [{old_ip}] 变更为 [{new_ip}]。"
+            msg = f"Success! Updated [{node_name} (#{node_id})] IPv4 from [{old_ip}] to [{new_ip}]."
 
         conn.commit()
         try:
@@ -182,5 +186,5 @@ finally:
         docker_api("POST", f"/containers/{container_name}/start", timeout=12.0)
 
 wait_headscale_ready(12.0)
-print(msg + " Headscale 服务已完成重载。")
+print(msg + " Headscale service reloaded.")
 PYEOF
