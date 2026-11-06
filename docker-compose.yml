@@ -1,0 +1,16 @@
+services:
+  headscale-ip-webui:
+    build: .
+    container_name: headscale-ip-webui
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=${PORT:-5000}
+      - HEADSCALE_CONTAINER=${HEADSCALE_CONTAINER:-headscale}
+      - HEADSCALE_URL=${HEADSCALE_URL:-}
+      - HEADSCALE_DB_PATH=/data/db.sqlite
+      - HEADSCALE_CONFIG_PATH=/etc/headscale/config.yaml
+    volumes:
+      - ${HEADSCALE_DATA_DIR:-/data/headscale/lib}:/data
+      - ${HEADSCALE_CONFIG_DIR:-/data/headscale/config}:/etc/headscale:ro
+      - /var/run/docker.sock:/var/run/docker.sock
